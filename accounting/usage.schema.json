@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rsdb-usage/1",
+  "title": "Run token accounting summary (RESULTS/usage.json)",
+  "description": "Every total MUST equal the exact sum of the corresponding fields in usage-events.jsonl (SPEC §17.5). by_component keys MUST be listed in harness.components; the verifier checks this.",
+  "type": "object",
+  "required": ["format", "harness", "status", "window", "verification", "totals", "by_model", "by_component", "interventions"],
+  "$defs": {
+    "tokenFields": {
+      "type": "object",
+      "properties": {
+        "requests": { "type": "integer", "minimum": 0 },
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "cache_read_tokens": { "type": "integer", "minimum": 0 },
+        "cache_write_tokens": { "type": "integer", "minimum": 0 },
+        "cache_write_1h_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "reasoning_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "server_tool_uses": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "cost_usd": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "tokens": {
+      "$ref": "#/$defs/tokenFields",
+      "required": ["requests", "input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens", "cost_usd"]
+    },
+    "reported": {
+      "$ref": "#/$defs/tokenFields",
+      "required": ["input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens"],
+      "description": "Numbers from the gateway or a provider export; providers may not report request counts or cost."
+    }
+  },
+  "properties": {
+    "format": { "const": "rsdb-usage/1" },
+    "harness": {
+      "type": "object",
+      "required": ["name", "version", "components", "config_sha256"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Every component declared in HARNESS.md that can call an LLM."
+        },
+        "config_sha256": { "type": "string", "description": "Hash of the frozen configuration manifest (SPEC §16.1)." }
+      }
+    },
+    "status": {
+      "enum": ["SUBMITTED", "TIMEOUT", "COST_CAP", "ABORTED_TOKEN_ACCOUNTING_UNAVAILABLE", "ABORTED_TOKEN_ACCOUNTING_LOST"]
+    },
+    "window": {
+      "type": "object",
+      "required": ["kickoff", "submission", "last_request", "wall_clock_seconds"],
+      "properties": {
+        "kickoff": { "type": "string", "format": "date-time" },
+        "submission": { "type": ["string", "null"], "format": "date-time", "description": "Push time of the submission tag." },
+        "last_request": { "type": ["string", "null"], "format": "date-time" },
+        "wall_clock_seconds": { "type": "number", "minimum": 0, "description": "SPEC §16.4." }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["level", "method"],
+      "properties": {
+        "level": { "enum": ["V1", "V2"] },
+        "method": { "type": "string", "description": "e.g. \"otel+transcripts\", \"rollout\", \"stream-json\"." },
+        "reconciliation": {
+          "type": "array",
+          "description": "The gateway log and the provider's usage report for the run workspace (SPEC §17.6); under V1 both are required.",
+          "items": {
+            "type": "object",
+            "required": ["source", "account", "reported", "unmatched_requests"],
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "^(gateway|provider:[a-z0-9-]+)$",
+                "examples": ["gateway", "provider:anthropic", "provider:openai"]
+              },
+              "account": { "type": "string", "description": "Gateway key or provider workspace/project id (no secrets)." },
+              "reported": { "$ref": "#/$defs/reported" },
+              "unmatched_requests": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Requests with no matching event (SPEC §17.2 point 4). Always 0 for provider reports, which aggregate."
+              }
+            }
+          }
+        }
+      },
+      "if": { "properties": { "level": { "const": "V1" } } },
+      "then": {
+        "required": ["reconciliation"],
+        "properties": {
+          "reconciliation": {
+            "allOf": [
+              { "contains": { "type": "object", "required": ["source"], "properties": { "source": { "const": "gateway" } } } },
+              { "contains": { "type": "object", "required": ["source"], "properties": { "source": { "pattern": "^provider:" } } } }
+            ]
+          }
+        }
+      }
+    },
+    "totals": { "$ref": "#/$defs/tokens" },
+    "by_model": { "type": "object", "additionalProperties": { "$ref": "#/$defs/tokens" } },
+    "by_component": { "type": "object", "additionalProperties": { "$ref": "#/$defs/tokens" } },
+    "interventions": {
+      "type": "object",
+      "required": ["nudges", "infrastructure"],
+      "properties": {
+        "nudges": { "type": "integer", "minimum": 0 },
+        "infrastructure": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "additionalProperties": true
+}

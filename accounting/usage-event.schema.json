@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rsdb-usage-event/1",
+  "title": "One LLM request made by the harness (one line of RESULTS/usage-events.jsonl)",
+  "description": "Token fields are normalized per SPEC §17.4: input_tokens excludes cache reads and writes; output_tokens includes reasoning. A native source that only reports per-turn totals may emit one aggregated event per turn with requests > 1 (SPEC §17.5).",
+  "type": "object",
+  "required": [
+    "ts",
+    "component",
+    "agent_id",
+    "provider",
+    "model",
+    "requests",
+    "status",
+    "input_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "output_tokens",
+    "source"
+  ],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time", "description": "Request completion time, UTC (end of the turn for aggregated events)." },
+    "component": {
+      "type": "string",
+      "description": "Harness component that issued the request, with version, e.g. \"claude-code@2.1.300\", \"codex@0.60.0\", \"planner\"."
+    },
+    "agent_id": { "type": "string", "description": "Stable id of the agent/session that made the request." },
+    "parent_agent_id": { "type": ["string", "null"] },
+    "purpose": {
+      "type": ["string", "null"],
+      "description": "Free text such as main, subagent, review, compaction, auxiliary (Claude Code: query_source)."
+    },
+    "provider": { "type": "string", "examples": ["anthropic", "openai", "google", "self-hosted"] },
+    "account": { "type": ["string", "null"], "description": "Gateway key or provider workspace the request was billed to (no secrets)." },
+    "model": { "type": "string" },
+    "speed": { "type": ["string", "null"], "description": "Provider speed mode if priced differently, e.g. Claude Code fast mode." },
+    "service_tier": { "type": ["string", "null"], "description": "e.g. OpenAI default / priority / flex, Anthropic standard / priority." },
+    "region": { "type": ["string", "null"], "description": "Data-residency region if priced differently." },
+    "requests": { "type": "integer", "minimum": 1, "description": "1 for a single request; more for an aggregated per-turn event." },
+    "request_id": { "type": ["string", "null"], "description": "Provider request or message id of a single request, when available." },
+    "request_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Aggregated events: ids of the requests they cover, when known."
+    },
+    "status": { "enum": ["ok", "error"], "description": "error = the request failed but was billed." },
+    "input_tokens": { "type": "integer", "minimum": 0 },
+    "cache_read_tokens": { "type": "integer", "minimum": 0 },
+    "cache_write_tokens": { "type": "integer", "minimum": 0 },
+    "cache_write_1h_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Part of cache_write_tokens written with a 1-hour TTL; null if the source does not report the split."
+    },
+    "output_tokens": { "type": "integer", "minimum": 0 },
+    "reasoning_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Subset of output_tokens, only if the provider reports it separately."
+    },
+    "server_tool_uses": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 },
+      "description": "Billed server-side tool invocations, e.g. {\"web_search\": 2}."
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Filled in by kit/accounting/verify from prices.json; a harness estimate here is ignored."
+    },
+    "source": {
+      "enum": ["otel", "transcript", "stream-json", "rollout", "gateway", "provider-api", "custom"],
+      "description": "Native record the event was derived from."
+    }
+  },
+  "additionalProperties": true
+}
