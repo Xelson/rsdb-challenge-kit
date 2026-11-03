@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rsdb-provider-report/1",
+  "title": "The provider's usage report for one run workspace (RESULTS/provider/*.json)",
+  "description": "Organizers fetch it from the provider's usage API (for example the Anthropic Usage & Cost Admin API) when RESULTS/ is assembled and normalize it per SPEC §17.4. The workspace serves exactly one harness's run (SPEC §16.1).",
+  "type": "object",
+  "required": ["format", "provider", "account", "from", "to", "fetched_at", "source", "by_model"],
+  "properties": {
+    "format": { "const": "rsdb-provider-report/1" },
+    "provider": { "type": "string" },
+    "account": { "type": "string", "description": "Provider workspace or project id; must equal the `account` of the gateway records it covers." },
+    "from": { "type": "string", "format": "date-time" },
+    "to": { "type": "string", "format": "date-time" },
+    "fetched_at": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "description": "API endpoint or export the numbers come from." },
+    "by_model": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens"],
+        "properties": {
+          "input_tokens": { "type": "integer", "minimum": 0 },
+          "cache_read_tokens": { "type": "integer", "minimum": 0 },
+          "cache_write_tokens": { "type": "integer", "minimum": 0 },
+          "output_tokens": { "type": "integer", "minimum": 0 },
+          "server_tool_uses": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

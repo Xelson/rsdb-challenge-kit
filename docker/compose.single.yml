@@ -1,0 +1,14 @@
+# One node for development: kit/docker/build.sh server && docker compose -f kit/docker/compose.single.yml up
+# The judge creates equivalent containers through the Docker API.
+name: rsdb-single
+services:
+  n1:
+    image: ${RSDB_SERVER_IMAGE:-rsdb-server:local}
+    environment:
+      RSDB_NODE_ID: n1
+      RSDB_LOG: ${RSDB_LOG:-info}
+    ulimits: { nofile: { soft: 65536, hard: 65536 } }
+    ports: ["7700:7700"]
+    volumes: [n1:/data]
+volumes:
+  n1: {}

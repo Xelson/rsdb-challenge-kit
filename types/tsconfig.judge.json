@@ -1,4 +1,4 @@
-// Suite T7 (SPEC §13.5). The judge links /kit/node_modules/@rsdb/client -> /sdk, so `@rsdb/client`
+// Suite T7 (SPEC §13.5). Runs in the kit Node image, where /node_modules/@rsdb/client links to /sdk, so `@rsdb/client`
 // resolves to the submission's built package through its exports["."].types.
 {
   "compilerOptions": {

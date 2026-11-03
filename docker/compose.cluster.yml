@@ -1,0 +1,40 @@
+# Three nodes for development (SPEC §11): kit/docker/build.sh server && docker compose -f kit/docker/compose.cluster.yml up
+# Nodes reach each other only on the `peer` network (fixed addresses); clients use `client` (host ports 7711-7713).
+# RSDB_PEER_DELAY=1ms adds the benchmark's one-way peer delay (§14.1).
+name: rsdb-cluster
+x-node: &node
+  image: ${RSDB_SERVER_IMAGE:-rsdb-server:local}
+  ulimits: { nofile: { soft: 65536, hard: 65536 } }
+  cap_add: [NET_ADMIN]
+x-env: &env
+  RSDB_PEERS: n1=10.77.0.11:7701,n2=10.77.0.12:7701,n3=10.77.0.13:7701
+  RSDB_PEER_SUBNET_PREFIX: 10.77.0.
+  RSDB_PEER_DELAY: ${RSDB_PEER_DELAY:-}
+  RSDB_LOG: ${RSDB_LOG:-info}
+services:
+  n1:
+    <<: *node
+    environment: { <<: *env, RSDB_NODE_ID: n1 }
+    ports: ["7711:7700"]
+    volumes: [n1:/data]
+    networks: { peer: { ipv4_address: 10.77.0.11 }, client: {} }
+  n2:
+    <<: *node
+    environment: { <<: *env, RSDB_NODE_ID: n2 }
+    ports: ["7712:7700"]
+    volumes: [n2:/data]
+    networks: { peer: { ipv4_address: 10.77.0.12 }, client: {} }
+  n3:
+    <<: *node
+    environment: { <<: *env, RSDB_NODE_ID: n3 }
+    ports: ["7713:7700"]
+    volumes: [n3:/data]
+    networks: { peer: { ipv4_address: 10.77.0.13 }, client: {} }
+networks:
+  peer:
+    ipam: { config: [{ subnet: 10.77.0.0/24 }] }
+  client: {}
+volumes:
+  n1: {}
+  n2: {}
+  n3: {}

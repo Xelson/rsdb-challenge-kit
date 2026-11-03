@@ -1,0 +1,9 @@
+{
+  "name": "@rsdb/client",
+  "version": "0.0.0-stub",
+  "private": true,
+  "type": "module",
+  "description": "No-op SDK for the benchmark's cli_* baseline (SPEC §14.2): the runner with this stub instead of the submission's SDK.",
+  "main": "index.js",
+  "exports": { ".": "./index.js" }
+}

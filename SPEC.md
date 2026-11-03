@@ -26,10 +26,10 @@ The key words MUST, MUST NOT, SHOULD, MAY are used as in RFC 2119. Sections mark
 | `types/api.test-d.ts` | normative | compile-time API tests (suite T7) |
 | `bench/schema.ts` | normative | benchmark schema |
 | `accounting/usage-event.schema.json`, `accounting/usage.schema.json` | normative | token accounting formats |
-| `conformance/` | organizers ship before kickoff | suites T1–T7, D1–D5, F1–F4, SQLite voter (§13.3), fault proxy |
-| `bench/runner/`, `bench/run-local.sh` | organizers ship before kickoff | load generators, metric collection, scoring, local runs (§14.6) |
+| `conformance/` | organizers ship before kickoff | runner (`run.sh`), suites T1–T7, D1–D5, F1–F4, SQLite voter (§13.3), fault proxy, T3 cross-check (`crosscheck.ts`, §13.4) |
+| `bench/runner/`, `bench/lib/`, `bench/scenarios/`, `bench/run.ts`, `bench/run-local.sh`, `bench/score.ts` | organizers ship before kickoff | load generators, metric collection, scenarios, local runs (§14.6), points (§14.5) |
 | `docker/`, `rust-toolchain.toml` | organizers ship before kickoff | build images; compose files for 1 and 3 nodes |
-| `accounting/prices.json`, `accounting/verify/`, `accounting/CALIBRATION.md` | organizers ship before kickoff | price table, usage verifier, calibration task |
+| `accounting/prices.json`, `accounting/gateway-record.schema.json`, `accounting/provider-report.schema.json`, `accounting/verify/`, `accounting/CALIBRATION.md` | organizers ship before kickoff | price table, gateway and provider evidence formats, usage verifier, calibration task |
 | `RUNBOOK.md` | organizers ship before kickoff | infrastructure recovery procedure (§16.3) |
 | `package.json`, `types/tsconfig.judge.json` | normative | pinned TypeScript version and compiler settings for T7 |
 
@@ -88,9 +88,10 @@ precision of diffs. The start of §14 shows how many points each one carries.
 
 Build, performed by the judge with the kit images:
 
-- server: `cargo build --release --locked -p rsdb-server` using `kit/rust-toolchain.toml`. Cargo profile settings
+- server: `cargo build --release --locked -p rsdb-server` in the kit builder image with the toolchain of `kit/rust-toolchain.toml`
+  (`kit/docker/build.sh server`). Cargo profile settings
   (LTO, codegen-units, panic strategy) and allocator choice are up to the submission.
-- sdk: `npm ci && npm run build` in `/sdk`. The result MUST be importable as `@rsdb/client` (with types) and MUST provide the `rsdb` bin.
+- sdk: `npm ci && npm run build` in `/sdk`, in the kit Node image (`kit/docker/build.sh sdk`). The result MUST be importable as `@rsdb/client` (with types) and MUST provide the `rsdb` bin.
 - No system packages beyond the kit images. SQLite MUST be compiled from source through a crate (for example `rusqlite` with `bundled`), version ≥ 3.46.
 
 Dependencies:
@@ -156,7 +157,9 @@ PlanStep   = { action: "createTable" | "dropTable" | "addColumn" | "dropColumn" 
 - A plan has one step per change and is compared as a multiset. `createTable` alone covers the new table's columns and indexes;
   `dropTable` alone covers its indexes; changing an index (its columns or `unique`) is `dropIndex` + `createIndex`. `destructive` is true
   exactly for `dropTable`, `dropColumn` and `makeRequired`.
-- `dryRun=1` returns exactly what the real push would return, including 409 `DESTRUCTIVE_CHANGE` without `force`, and applies nothing.
+- `dryRun=1` returns exactly what the real push would return at that moment, and applies nothing: for a non-empty plan that is
+  `applied: true` with the `version` and `schemaVersion` the push would get, and every error the push would return (409
+  `DESTRUCTIVE_CHANGE` without `force`, `CONSTRAINT_VIOLATION`, `INVALID_ARGUMENT`).
 - `/v1/stats`: `connections` = open client connections; `subscriptions` = live SDK `Subscription` handles (the same query subscribed
   twice counts twice); `uniqueQueries` = distinct live queries after any deduplication. It is self-reported and used only for leak gates
   (R11, B6), never for performance points.
@@ -247,6 +250,7 @@ A push compares the desired `SchemaIR` with the current one and computes a plan:
 | optional → required | destructive; with `force` fails with `CONSTRAINT_VIOLATION` if NULLs exist |
 | drop column; drop table | destructive |
 | add required column without default; change column type; index on a `json` column | rejected (`INVALID_ARGUMENT`) |
+| any `SchemaIR` that breaks §5.3 (names, case-insensitive clashes, limits) or names an unknown type, or an index on a column the table lacks | rejected (`INVALID_ARGUMENT`) |
 | rename | not supported (it is a drop plus an add) |
 
 - A destructive plan without `force` is refused with `DESTRUCTIVE_CHANGE` and nothing is applied. Dry runs: §4.3.
@@ -335,8 +339,10 @@ Cases not named above:
 | empty `set`; `id` in `set`; `upsert` without `id`; an id that is not a string, empty or over 128 bytes; limits of §5.3, §6.2, §7.2 | `INVALID_ARGUMENT` |
 | operator not defined for the column type; filter or sort on `json`; non-integer `$inc` on int; a result that is not finite or not a safe integer | `TYPE_ERROR` |
 
-When several errors apply, the first in this order wins: `UNKNOWN_DATABASE`, `UNKNOWN_TABLE`, `INVALID_ARGUMENT`, `UNKNOWN_FIELD`,
-`TYPE_ERROR`, then data errors (`NOT_FOUND`, `DUPLICATE_ID`, `CONSTRAINT_VIOLATION`).
+When several errors apply to one operation, the first in this order wins: `UNKNOWN_DATABASE`, `UNKNOWN_TABLE`, `INVALID_ARGUMENT`,
+`UNKNOWN_FIELD`, `TYPE_ERROR`, then data errors (`NOT_FOUND`, `DUPLICATE_ID`, `CONSTRAINT_VIOLATION`). A batch checks its operations in
+order, each one completely before the next, and reports the error of the first operation that fails (§7.2); limits on the batch as a
+whole (§5.3, §7.2) are checked first and carry `opIndex: null`.
 
 ### 7.2 Batches
 
@@ -453,7 +459,7 @@ Behaviour:
 
 ## 10. CLI
 
-Shipped in `@rsdb/client` as bin `rsdb`. Global options: `--url <http://host:port>` (default: env `RSDB_URL`, then `http://127.0.0.1:7700`),
+Shipped in `@rsdb/client` as bin `rsdb`; the judge runs it as `node <path of the bin in sdk/package.json>` from an unrelated working directory. Global options: `--url <http://host:port>` (default: env `RSDB_URL`, then `http://127.0.0.1:7700`),
 `--json` (print the admin API response body verbatim).
 
 | Command | Effect |
@@ -504,9 +510,9 @@ Exit codes:
 - **Partition model.** A partition cuts traffic between nodes; clients may still reach every node. A node that has been out of contact
   with a majority for more than 3 s rejects SDK operations with `UNAVAILABLE` and closes its SDK sessions, so clients move to another URL.
   The SDK detects a dead or silent connection within 5 s (for example with heartbeats).
-- **Liveness.** If a leader fails (SIGKILL or partition) and a majority stays connected, the majority side acknowledges its first write
-  within 10 s of the fault and then acknowledges at least 90 % of writes. After the failed node returns or the partition heals, every
-  node reports the same `applied` version in `/v1/cluster` within 30 s.
+- **Liveness.** If a leader fails (SIGKILL or partition) and a majority stays connected, the majority side acknowledges a write sent
+  after the fault within 10 s of the fault and then acknowledges at least 90 % of writes. After the failed node returns or the
+  partition heals, every node reports the same `applied` version in `/v1/cluster` within 30 s.
 - A write is acknowledged only after it is durable on a majority (2 of 3). Notifications expose only majority-committed versions
   (commit point, §8.1); anything else can violate R8.
 - A minority side MUST NOT acknowledge writes.
@@ -527,7 +533,20 @@ error codes, resume after reconnect, flow control. A missing or clearly insuffic
 ## 13. Conformance testing
 
 The kit runs suites against the built images. Public seeds ship in the kit so harnesses can test themselves; the final evaluation uses
-secret seeds and larger operation counts.
+secret seeds and larger operation counts. `kit/conformance/run.sh [--suite T1,T4] [--level L1|L2|L3] [--scale public|full] [--seeds "T3=1,2;T4=7"]`
+runs them inside the kit Node image against `rsdb-server:local` and the built `sdk/`; `public` (the default) uses the public seeds and
+reduced counts, `full` the counts of §13.5; `--level` runs the suites of that level and below. The runner loads `@rsdb/client` from `/sdk`
+and runs the CLI as `node <bin>` with the `rsdb` bin declared in `sdk/package.json`. Fault schedules count batches, not seconds (T6 kills
+the node after 25 % and 60 % of its batches; the proxy load continues until at least 5 cuts happened; D4 and F1–F3 strike right after the
+first quiescence point and the load continues until the fault sequence is over), so a fast server meets the same faults as a slow one.
+
+Nodes sit on two internal Docker networks (no gateway, no other route): `client`, shared with the judge, and `peer`, with the fixed
+addresses of `--peers`. A partition detaches a node from `peer`. Cluster clients list every node's URL, their own node first. In the D
+and F suites every subscription is mirrored on a reader of each node and deliveries at the same version must be equal (R8); in fault
+runs the judge reads every table back through each node at every quiescence point, requires equal states (R8) and resumes voter replay
+from that state after a version no acknowledgement covers. Liveness (§11.2) is measured from the write log: the first acknowledgement
+of a write *sent after* the fault, then the share of acknowledged writes among those sent after that acknowledgement (data errors
+excluded). F2 probes the isolated node through a client that lists only its URL.
 
 ### 13.1 No reference implementation
 
@@ -556,19 +575,22 @@ The kit contains no reference implementation of the system and no hand-written m
 
 A kit module of a few hundred lines, reviewed by both participants before the kit is frozen. It:
 
-- creates a stock SQLite database from a `SchemaIR` (NOT NULL, DEFAULT, unique indexes);
+- creates a stock SQLite database from a `SchemaIR` (NOT NULL, unique indexes; defaults are filled in when a row is built and bound as
+  parameters) and applies schema pushes by rebuilding every changed table;
 - applies `MutationIR` batches in version order (`$inc` as `coalesce(col, 0) + n`, upsert as full replace);
 - translates `QueryIR` to SQL with §6.2 semantics (BINARY collation, byte-prefix `startsWith`, implicit `id` tiebreaker) and converts
   results to SDK value types.
 
-§6.2 coincides with SQLite's own behaviour, so the translation stays mechanical. Versions are dense and every acknowledged mutation returns
+It lives in `conformance/voter/voter.ts`, with literal self-tests in `voter.test.ts`. §6.2 coincides with SQLite's own behaviour, so the
+translation stays mechanical. Versions are dense and every acknowledged mutation returns
 its version, so a fault-free test knows the complete log of committed batches. The voter replays it and computes `Q(D_v)` for every snapshot
 observed at version `v`, which checks R1 at every delivered version, not only at quiescence. A run with unknown-outcome writes is replayed
 up to the first version that no acknowledgement covers; later deliveries rely on §13.2.
 
 Cost is bounded so that a seed takes at most 10 minutes on a P5 machine: fuzz generators keep each table at or below 20,000 rows
 (deletes balance inserts); the voter checks every delivery of 30 randomly chosen subscriptions per seed and, for all other subscriptions,
-the last delivery before each quiescence point; results are compared by hash, and in full only when the hashes differ.
+the last delivery before each quiescence point; results are compared by hash, and in full only when the hashes differ. If a seed
+delivers more than 150,000 snapshots to its chosen subscriptions, an evenly spaced sample of 150,000 is checked.
 
 ### 13.4 Cross-checking and triage
 
@@ -581,7 +603,8 @@ T3 gives A, B and the voter the same data and the same queries, so each query ha
 | both submissions agree with each other against the voter | triage |
 | all three differ | triage |
 
-Concurrent fuzz runs produce a different history in each submission, so there the voter judges alone. A voter-only finding that appears in
+`node kit/conformance/crosscheck.ts <results-A> <results-B>` applies this table to the per-query answers that T3 saves for every
+seed and prints both rescored T3 values with the triage list. Concurrent fuzz runs produce a different history in each submission, so there the voter judges alone. A voter-only finding that appears in
 both submissions with the same signature also goes to triage. Both submissions run on SQLite and may share a translation mistake with the
 voter, so a majority is not proof: either participant may refer any failure signature to triage within 24 hours of the preliminary results.
 
@@ -612,7 +635,7 @@ Each suite scores `weight × passed_cases / total_cases`, where a case is a hand
 | T4 Reactive fuzz | 8 | 8 writer clients send 20,000 random batches (1–20 ops, every kind) with quiescence points and a bank workload; 300 subscriptions over 20 reader clients (rows and count queries, with/without limit and select, subscribe/unsubscribe churn); §13.2 checks on every callback, R1 through voter replay |
 | T5 Diffs and spurious updates | 3 | no-op updates, updates of unselected columns, updates outside the limit window, top-K entry and exit, pure reorders, delete and re-insert of one id in one batch; expected callbacks written by hand |
 | T6 Faults | 3 | connections cut by a TCP proxy every 2 s during T4-style load (R10); SIGKILL and restart under writes (durability, version continuity, client recovery); §13.2 fault checks |
-| T7 Types | 2 | `types/api.test-d.ts` compiled with the TypeScript version pinned in `kit/package.json` and `kit/types/tsconfig.judge.json`; `@rsdb/client` resolves through `/kit/node_modules/@rsdb/client` → `/sdk` via its `exports["."].types` |
+| T7 Types | 2 | `types/api.test-d.ts` compiled with the TypeScript version pinned in `kit/package.json` and `kit/types/tsconfig.judge.json`, inside the kit Node image, where `@rsdb/client` resolves through `/node_modules/@rsdb/client` → `/sdk` via its `exports["."].types` |
 | **L2** | **8** | |
 | D1 Cluster formation | 1 | health, admin operations on any node apply cluster-wide |
 | D2 Cross-node consistency | 2 | the same subscriptions on all 3 nodes under T4-style load; R1 through voter replay, R8 |
@@ -696,7 +719,10 @@ cost per pair instead of raising it.
 1. Every subscription: listener versions strictly increase; no error other than those the scenario provokes.
 2. **Audit subscriptions.** 2 % of each scenario's subscriptions (at least 50), chosen at random and opened by reader processes the
    server cannot tell apart from the others (they are left out of `cli_*`), get every per-callback check of §13.2, and the voter (§13.3)
-   checks R1 at every version they deliver.
+   checks R1 at every version they deliver. A full check reads
+   the whole result, which no process can do at B4's rate for a 20k-row result, so each audit process spends at most half of its
+   time on full checks: callbacks over that budget still get the version, diff-presence and `fromVersion` checks and R11, the next
+   fully checked callback skips only the diff comparison against the one before, and R1 is checked at every fully checked version.
 3. After quiescence every client's `waitForVersion(lastAcked)` resolves within 30 s, and every subscription's final result equals the
    voter's (compared by hash).
 4. Failed mutations and subscribes are at most 0.1 % of those issued in the window, unless the scenario says otherwise (B11, B12).
@@ -730,10 +756,10 @@ Writers fill `sentAt` with the scheduled send time. It serves spot checks only; 
 | B6 Subscription churn | 5 | B3 data; 200 connections | 5,000 subscribes/s, lifetime exponential with 1 s mean (80 % top-20 rows queries, 20 % count queries); 500 updates/s; then unsubscribe all and idle 30 s | ttfs p50 (20 %), ttfs p99 (30 %), cpu per subscribe (20 %), retained mem: 30 s after the last unsubscribe minus before the first subscribe, in MB (30 %) | `/v1/stats.subscriptions` = 0 at the end |
 | B7 Cold reads | 2 | B3 data; before the measurement the server is restarted on the preloaded data dir and the host page cache is dropped | 1,000 sequential `fetch` of `users{team:k, score≥x} score desc limit 50`; 1,000 sequential subscribe → ready → unsubscribe of count queries | fetch p50 (25 %), fetch p99 (25 %), count ttfs p50 (25 %), p99 (25 %); preload rate reported, unscored | |
 | B8 Footprint | 6 | (a) 20,000 clients, each holding one count subscription on a table nobody writes; (b) 1,000 databases × 1k messages, 2 × 1 subscriptions each | (b) 1 insert/s per database | (a) mem per connection: all subscriptions ready minus before connecting (30 %); (b) steady mem (40 %), lat p99 (20 %), cpu per write (10 %) | (a) `ss` shows 20,000 established client connections |
-| B9 Slow consumer | 4 | 100 × 100 normal subscriptions plus one slow process with 1 × 100 hot subscriptions; the slow process's network namespace has `net.ipv4.tcp_rmem` max 64 KiB | 1,000 inserts/s on the hot channels + 1,000/s random; after 30 s the slow process is SIGSTOPped for 60 s, then SIGCONTed | mem growth while stopped (30 %); normal clients' lat p99 while stopped (25 %); convergence: SIGCONT → every hot subscription synced past the latest version acknowledged at SIGCONT (25 %); bytes the slow client receives until convergence, from its container's `rx_bytes` (20 %) | growth ≤ 256 MB; convergence ≤ 30 s |
+| B9 Slow consumer | 4 | 100 × 100 normal subscriptions plus one slow process with 1 × 100 hot subscriptions; the slow process's network namespace has `net.ipv4.tcp_rmem` max 64 KiB | 1,000 inserts/s on the hot channels + 1,000/s random; after 30 s the slow process is stopped for 60 s (cgroup freezer: like SIGSTOP, its kernel still fills the socket buffer), then resumed | mem growth while stopped (30 %); normal clients' lat p99 while stopped (25 %); convergence: resume → every hot subscription synced past the latest version acknowledged at the resume (25 %); bytes the slow client receives until convergence, from its container's `rx_bytes` (20 %) | growth ≤ 256 MB; convergence ≤ 30 s |
 | B10 Cluster fan-out | 5 | L2; 300k messages over 30k channels; 100 × 100 subscriptions per node | 1,000 inserts/s through writers spread over all nodes | lat p50 (10 %), lat p99 (20 %), peer bytes per write (40 %), total mem of 3 nodes (30 %) | |
-| B11 Failover | 3 | L3; 3,000 subscriptions over all nodes | 200 writes/s (inserts and `$inc` on 10 counters); five times, every 40 s: SIGKILL the current leader, restart it 20 s later | medians over the five kills: write unavailability, last ack before the kill → first ack after (50 %); recovery, kill → all subscriptions synced past the first post-failover version (50 %) | F1 checks; unavailability ≤ 10 s; check 4 ignores the 15 s after each kill |
-| B12 Max throughput | 3 | 1,000 channels, 1,000 subscriptions; 64 writer connections | open-loop single-row inserts from 1,000/s, ×1.5 every 15 s until a step fails, then three 15 s bisection steps between the last passing and the failing rate; after a failing step writes pause until `sync` < 1 s (at most 30 s) | highest passing rate (100 %) | a step passes if lat p99 ≤ 250 ms, ack p99 ≤ 250 ms, errors ≤ 0.1 %, no unknown outcome and writers on schedule; validation covers the steps up to the last passing one |
+| B11 Failover | 3 | L3; 3,000 subscriptions over all nodes | 200 writes/s (inserts and `$inc` on 10 counters); five times, every 40 s: SIGKILL the current leader, restart it 20 s later | medians over the five kills: write unavailability, last ack before the kill → first ack after (50 %); recovery, kill → all subscriptions synced past the first post-failover version (50 %) | F1 checks; unavailability ≤ 10 s; check 4 ignores writes scheduled from 1 s before each kill to 15 s after it |
+| B12 Max throughput | 3 | 1,000 channels, 1,000 subscriptions; 64 writer connections | open-loop single-row inserts from 1,000/s, ×1.5 every 15 s until a step fails, then three 15 s bisection steps between the last passing and the failing rate; after a failing step writes pause until `sync` < 1 s (at most 30 s) | highest passing rate (100 %) | a step passes if lat p99 ≤ 250 ms, ack p99 ≤ 250 ms, errors ≤ 0.1 %, no unknown outcome and writers on schedule; validation covers the steps up to the last passing one; the runner offers at most 24,000 writes/s (24 writer processes, §14.1), and a submission that passes that rate scores it |
 | B13 Mixed queries | 4 | B3 data; 200 × 25 subscriptions from a family: ranges and `in` on indexed and unindexed columns, `startsWith` on `name`, `$or` of two teams, filters on `active`, projections, limits and unlimited results (≤ 2,000 rows); 20 % count queries | 2,000 writes/s: 60 % updates of `score`, `name`, `active` or `sentAt` (`sentAt` is never selected or filtered), 20 % inserts, 20 % deletes | lat p50 (10 %), lat p99 (25 %), cpu per write (35 %), net per pair (30 %) | |
 
 ### 14.5 Performance points
@@ -764,7 +790,13 @@ one on which it leads lowers the other submission's points.
 with every count and rate from §14.4 multiplied by the scale (default 0.25), applies the same metric definitions, control runs and
 validation, and prints raw metrics per scenario as a table and as JSON. It prints no points, because points depend on the other
 submission. Cluster scenarios run as three containers on the same machine. The dev machine differs from the bench host, so local numbers
-show direction and relative change, not final values.
+show direction and relative change, not final values. Docker needs at least 12 GiB of memory (the single-node server alone may use 8 GiB);
+with less the script warns, and a server killed for lack of memory fails the run with that reason.
+
+`--warmup` and `--window` (seconds) shorten the phases for quick checks, `--reps` repeats, and `--keep-logs` keeps the generators' logs
+for debugging; scored runs use the defaults. At reduced scales the audit share (§14.2 check 2) is capped at a quarter of a
+scenario's subscriptions, so that small runs still measure non-audit clients. `kit/bench/score.ts A=<results> B=<results>` computes the
+points of §14.5 from two submissions' result files.
 
 ---
 
@@ -945,6 +977,11 @@ Tokenizers differ between providers, so token counts compare like with like only
   known.
 - `RESULTS/usage.json`: summary, schema `accounting/usage.schema.json`. Its totals MUST equal the sum of the events exactly.
 - `RESULTS/raw/`: the snapshot of native records (§16.4) and the frozen converter.
+- `RESULTS/gateway/*.jsonl`: one line per request the gateway forwarded, schema `accounting/gateway-record.schema.json`.
+- `RESULTS/provider/*.json`: the provider's usage report per model, schema `accounting/provider-report.schema.json`.
+
+The verifier runs in the kit Node image as `node kit/accounting/verify/verify.ts RESULTS [--calibration] [--cost-cap <usd>]
+[--transcripts <dir>]`, writes `verify.txt` and `verify.json`, and exits 0 only if every check passes.
 
 ### 17.6 Verification levels
 

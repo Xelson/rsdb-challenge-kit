@@ -30,7 +30,7 @@
       "type": ["string", "null"],
       "description": "Free text such as main, subagent, review, compaction, auxiliary (Claude Code: query_source)."
     },
-    "provider": { "type": "string", "examples": ["anthropic", "openai", "google", "self-hosted"] },
+    "provider": { "type": "string", "examples": ["anthropic", "openai", "google"] },
     "account": { "type": ["string", "null"], "description": "Gateway key or provider workspace the request was billed to (no secrets)." },
     "model": { "type": "string" },
     "speed": { "type": ["string", "null"], "description": "Provider speed mode if priced differently, e.g. Claude Code fast mode." },

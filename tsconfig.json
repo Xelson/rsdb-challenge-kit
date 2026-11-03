@@ -2,7 +2,7 @@
 // The judge points the path at the submission's built package instead.
 {
   "compilerOptions": {
-    "target": "ES2023",
+    "target": "ES2024",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
@@ -10,9 +10,12 @@
     "skipLibCheck": false,
     "noUnusedLocals": false,
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "types": ["node"],
     "paths": {
       "@rsdb/client": ["./api/rsdb.d.ts"]
     }
   },
-  "include": ["api/**/*.d.ts", "types/**/*.ts", "bench/**/*.ts"]
+  "include": ["api/**/*.d.ts", "types/**/*.ts", "bench/**/*.ts", "accounting/**/*.ts", "conformance/**/*.ts"]
 }

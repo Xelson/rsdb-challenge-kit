@@ -1,13 +1,20 @@
 {
   "name": "rsdb-challenge-kit",
+  "version": "1.0.0-draft.1",
   "private": true,
   "type": "module",
-  "description": "RSDB Challenge kit. Pins the TypeScript version used by suite T7 (SPEC §13.5).",
+  "description": "RSDB Challenge kit: specification, conformance suites, benchmark runner and token accounting (SPEC \u00a70).",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "check:kit": "tsc -p tsconfig.json",
     "check:types": "tsc -p types/tsconfig.judge.json"
   },
-  "devDependencies": {
+  "dependencies": {
+    "@types/node": "24.19.2",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
     "typescript": "5.9.3"
   }
 }

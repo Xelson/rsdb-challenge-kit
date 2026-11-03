@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rsdb-gateway-record/1",
+  "title": "One request logged by the organizer LLM gateway (one line of RESULTS/gateway/*.jsonl)",
+  "description": "The gateway reads usage from the provider's response and normalizes it per SPEC §17.4. Billed failures keep their usage and HTTP status.",
+  "type": "object",
+  "required": ["ts", "account", "request_id", "provider", "model", "status", "input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens"],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time", "description": "Time the response completed, UTC." },
+    "account": { "type": "string", "description": "Gateway key id of the harness (no secret)." },
+    "request_id": { "type": "string", "description": "Provider request or message id; the key for matching events (SPEC §17.2 point 4)." },
+    "provider": { "type": "string" },
+    "model": { "type": "string", "description": "Model id as billed by the provider." },
+    "status": { "type": "integer", "description": "HTTP status returned to the harness." },
+    "speed": { "type": ["string", "null"] },
+    "service_tier": { "type": ["string", "null"] },
+    "region": { "type": ["string", "null"] },
+    "input_tokens": { "type": "integer", "minimum": 0 },
+    "cache_read_tokens": { "type": "integer", "minimum": 0 },
+    "cache_write_tokens": { "type": "integer", "minimum": 0 },
+    "cache_write_1h_tokens": { "type": ["integer", "null"], "minimum": 0 },
+    "output_tokens": { "type": "integer", "minimum": 0 },
+    "reasoning_tokens": { "type": ["integer", "null"], "minimum": 0 },
+    "server_tool_uses": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,5 @@
+# Toolchain for building rsdb-server (SPEC §3). The kit builder image ships exactly this version.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

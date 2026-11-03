@@ -1,0 +1,305 @@
+{
+  "format": "rsdb-prices/1",
+  "currency": "USD",
+  "unit": "USD per million tokens; server tools in USD per use",
+  "fetched": "2026-11-03",
+  "notes": [
+    "List prices used by kit/accounting/verify (SPEC \u00a717.7). Organizers re-check every entry against its source on the kickoff date and update `fetched`.",
+    "A request's prompt size (for tiers) is input + cache_read + cache_write tokens.",
+    "cost = (input*input + cache_read*cache_read + 5m writes*cache_write_5m + 1h writes*cache_write_1h + output*output) / 1e6 * region multiplier * service tier multiplier + server tool fees.",
+    "Providers with an empty `models` map are filled by organizers on the kickoff date for every model a harness declares; an unpriced model fails the TAG (SPEC \u00a717.3)."
+  ],
+  "providers": {
+    "anthropic": {
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "default_region": "global",
+      "region_multipliers": {
+        "global": 1,
+        "us": 1.1
+      },
+      "default_service_tier": "standard",
+      "service_tier_multipliers": {
+        "standard": 1,
+        "batch": 0.5
+      },
+      "server_tools": {
+        "web_search": 0.01,
+        "web_fetch": 0
+      },
+      "models": {
+        "claude-fable-5-1": {
+          "rates": {
+            "input": 10,
+            "cache_write_5m": 12.5,
+            "cache_write_1h": 20,
+            "cache_read": 0.25,
+            "output": 50
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-mythos-5-1": {
+          "rates": {
+            "input": 10,
+            "cache_write_5m": 12.5,
+            "cache_write_1h": 20,
+            "cache_read": 0.25,
+            "output": 50
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-fable-5": {
+          "rates": {
+            "input": 10,
+            "cache_write_5m": 12.5,
+            "cache_write_1h": 20,
+            "cache_read": 1,
+            "output": 50
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-mythos-5": {
+          "rates": {
+            "input": 10,
+            "cache_write_5m": 12.5,
+            "cache_write_1h": 20,
+            "cache_read": 1,
+            "output": 50
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-opus-5-5": {
+          "rates": {
+            "input": 4,
+            "cache_write_5m": 5,
+            "cache_write_1h": 8,
+            "cache_read": 0.2,
+            "output": 20
+          },
+          "speed": {
+            "fast": {
+              "input": 8,
+              "cache_write_5m": 10,
+              "cache_write_1h": 16,
+              "cache_read": 0.4,
+              "output": 40
+            }
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-opus-5": {
+          "rates": {
+            "input": 5,
+            "cache_write_5m": 6.25,
+            "cache_write_1h": 10,
+            "cache_read": 0.5,
+            "output": 25
+          },
+          "speed": {
+            "fast": {
+              "input": 10,
+              "cache_write_5m": 12.5,
+              "cache_write_1h": 20,
+              "cache_read": 1,
+              "output": 50
+            }
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-opus-4-8": {
+          "rates": {
+            "input": 5,
+            "cache_write_5m": 6.25,
+            "cache_write_1h": 10,
+            "cache_read": 0.5,
+            "output": 25
+          },
+          "speed": {
+            "fast": {
+              "input": 10,
+              "cache_write_5m": 12.5,
+              "cache_write_1h": 20,
+              "cache_read": 1,
+              "output": 50
+            }
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-opus-4-7": {
+          "rates": {
+            "input": 5,
+            "cache_write_5m": 6.25,
+            "cache_write_1h": 10,
+            "cache_read": 0.5,
+            "output": 25
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-opus-4-6": {
+          "rates": {
+            "input": 5,
+            "cache_write_5m": 6.25,
+            "cache_write_1h": 10,
+            "cache_read": 0.5,
+            "output": 25
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-opus-4-5": {
+          "rates": {
+            "input": 5,
+            "cache_write_5m": 6.25,
+            "cache_write_1h": 10,
+            "cache_read": 0.5,
+            "output": 25
+          },
+          "regions": [
+            "global"
+          ]
+        },
+        "claude-sonnet-5-5": {
+          "rates": {
+            "input": 2,
+            "cache_write_5m": 2.5,
+            "cache_write_1h": 4,
+            "cache_read": 0.1,
+            "output": 10
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-sonnet-5": {
+          "rates": {
+            "input": 2,
+            "cache_write_5m": 2.5,
+            "cache_write_1h": 4,
+            "cache_read": 0.2,
+            "output": 10
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-sonnet-4-6": {
+          "rates": {
+            "input": 3,
+            "cache_write_5m": 3.75,
+            "cache_write_1h": 6,
+            "cache_read": 0.3,
+            "output": 15
+          },
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-sonnet-4-5": {
+          "rates": {
+            "input": 3,
+            "cache_write_5m": 3.75,
+            "cache_write_1h": 6,
+            "cache_read": 0.3,
+            "output": 15
+          },
+          "regions": [
+            "global"
+          ]
+        },
+        "claude-haiku-5-5": {
+          "tiers": [
+            {
+              "max_prompt_tokens": 100000,
+              "rates": {
+                "input": 0.1,
+                "cache_write_5m": 0.125,
+                "cache_write_1h": 0.2,
+                "cache_read": 0.01,
+                "output": 0.5
+              }
+            },
+            {
+              "rates": {
+                "input": 0.5,
+                "cache_write_5m": 0.625,
+                "cache_write_1h": 1,
+                "cache_read": 0.05,
+                "output": 2.5
+              }
+            }
+          ],
+          "regions": [
+            "global",
+            "us"
+          ]
+        },
+        "claude-haiku-4-5": {
+          "rates": {
+            "input": 1,
+            "cache_write_5m": 1.25,
+            "cache_write_1h": 2,
+            "cache_read": 0.1,
+            "output": 5
+          },
+          "regions": [
+            "global"
+          ]
+        }
+      }
+    },
+    "openai": {
+      "source": "https://platform.openai.com/docs/pricing",
+      "default_region": "global",
+      "region_multipliers": {
+        "global": 1
+      },
+      "default_service_tier": "default",
+      "service_tier_multipliers": {
+        "default": 1
+      },
+      "server_tools": {},
+      "models": {}
+    },
+    "google": {
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "default_region": "global",
+      "region_multipliers": {
+        "global": 1
+      },
+      "default_service_tier": "standard",
+      "service_tier_multipliers": {
+        "standard": 1
+      },
+      "server_tools": {},
+      "models": {}
+    }
+  }
+}
